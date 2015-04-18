@@ -10,24 +10,30 @@ void main() {
   
 }
 
-
 class ShootingAction extends State {
-  Text text;
-  Sprite player, enemy;
+  Text scoreText;
+  Text waveText;
+  Sprite player;
+  Sprite<dynamic> enemy;
   TileSprite milkyway; //Our neverending milkyway sprite
   //CursorKeys cursors; //Keys for input
   Key firebutton, left, right, up, down;
   Sprite bullet;
+  Group<Sprite> lives;
   Group<Sprite> bullets;
   Group<Sprite> enemies;    
   num bullettime = 0;
   num ENEMYDISTANCE = 48;
+  num ENEMYVELOCITY = 150;
+  num score = 0, wave = 1;
   int tweenindex = 0;
+  String scoreString, waveString;
+  num cutoffdirection = 400;
+  
   
   Tween tween;
   var data;
   
-
   preload() {
     // Load assets
     // The second parameter is the URL of the image (relative)
@@ -35,8 +41,7 @@ class ShootingAction extends State {
     game.load.image('ship_base', 'assets/sprites/ship_base.png');
     game.load.image('bullet', 'assets/sprites/bullet.png');
     game.load.image('enemy', 'assets/sprites/cake.png');
-        
-        
+   
     //game.load.image('ship_left', 'assets/background/ship_left.png');
     //game.load.image('ship_right', 'assets/background/ship_right.png');
   }
@@ -49,6 +54,33 @@ class ShootingAction extends State {
 
     //  The scrolling starfield background
     milkyway = game.add.tileSprite(0, 0, 800, 600, 'milkyway');
+    
+    //  The score
+    scoreString = 'Score : ';
+    scoreText = game.add.text(10, 10, scoreString + score.toString(), new TextStyle()
+      ..font = '34px Helvetica'
+      ..fill = '#fff');
+    
+    //  The wave
+    waveString = 'Wave : ';
+    waveText = game.add.text(330, 10, waveString + wave.toString(), new TextStyle()
+      ..font = '34px Helvetica'
+      ..fill = '#fff');
+    
+    // The lives
+    lives = game.add.group();
+    game.add.text(game.world.width - 118, 10, 'Lives : ', new TextStyle()
+      ..font = '34px Arial'
+      ..fill = '#fff');
+    print(game.world.width.toString());
+    
+    for (var i = 0; i < 3; i++) {
+      var ship = lives.create(game.world.width - 100 + (30 * i), 60, 'ship_base');
+      ship.anchor.setTo(0.5, 0.5);
+      ship.angle = 90;
+      ship.alpha = 0.4;
+    }
+    
     //  Our bullet group
     bullets = game.add.group();
     bullets.enableBody = true;
@@ -63,7 +95,7 @@ class ShootingAction extends State {
     player = game.add.sprite(game.world.centerX, game.world.centerY*1.5, 'ship_base'); // Spawn in the middle and halfway down.
     
     // Add enemy
-    enemy = game.add.sprite(game.world.centerX, 100, 'enemy');
+    //enemy = game.add.sprite(game.world.centerX, 100, 'enemy');
     
     //  Achor in the middle
     player.anchor.set(0.5);
@@ -78,9 +110,9 @@ class ShootingAction extends State {
     firebutton = game.input.keyboard.addKey(Keyboard.SPACEBAR);
     
     // Create moving objects
-    var tweenData = { 'x': 400,'y': 0};
+    /*var tweenData = { 'x': 400,'y': 0};
     tween = game.make.tween(tweenData).to({'x':400,'y':700}, 10000, Easing.Linear.None);
-    data = tween.generateData(60); // Save the track that enemy will follow
+    data = tween.generateData(60);*/ // Save the track that enemy will follow
     
     // Create a group of enemies
     enemies = game.add.group();
@@ -117,22 +149,32 @@ class ShootingAction extends State {
     if (down.isDown) {
       player.body.velocity.y = 200;
     } 
-    // Shoot!
     
+    // Shoot!
     if (firebutton.isDown /* && player.alive*/) {
       fireBullet();
     }
-//    for (int i=0;i<10;i++){
-//      enemies.getAt(i).x = 0 + data[tweenindex]['x'];
-//      enemies.getAt(i).y = 0 + data[tweenindex]['y'] - i * ENEMYDISTANCE;
-//    }
     
-    //print(tweenindex);
+    enemies.forEachAlive((enemy) {
+      //print(enemy.y);
+      if(enemy.y > cutoffdirection) {
+        enemy.body.velocity.setTo(0,0);
+        enemy.body.velocity += ENEMYVELOCITY;
+        //cutoffdirection = cutoffdirection + Math.random() * 10;
+        //print("Outside");
+      }
+      if (enemy.y > 616 || enemy.x > 816 || enemy.y < -432|| enemy.x < 0 ) {
+        enemy.kill();
+      }
+    });
+    // Collision
+   // game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer);
+    game.physics.arcade.overlap(bullets, enemies, collisionHandler);
     
-    //tweenindex++;
-    //if (tweenindex == data.length) {
-    //  tweenindex=0;
-    //}
+    if (enemies.countLiving() == 0) {
+      newwave();
+    }
+    
   }
   
   fireBullet() {
@@ -157,33 +199,53 @@ class ShootingAction extends State {
   }
   
   createEnemies() {
-    
-    for (int y = 0; y < 8; y++) {  
-      var enemy = enemies.create(400, y * -48, 'enemy');
+    num rndX = Math.random() * 400;
+    //game.rnd.integerInRange(0, game.world.width);
+    cutoffdirection = 400 - Math.random() * 200;
+    print(rndX);
+    for (int y = 1; y < 9; y++) {  
+      
+      enemy = enemies.create(600 - rndX, y * -48, 'enemy'); // Live between 200 and 600 pixels
       enemy.anchor.setTo(0.5, 0.5);
       //alien.animations.add('fly', [ 0, 1, 2, 3 ], 20, true);
       //enemy.play('fly');
-      enemy.body.moves = false;
-      game.add.tween(enemy).to({'angle': 360}, 2000, Easing.Cubic.In, true, 1000 ,10,false);
+      //enemy.body.moves = false;
+      game.add.tween(enemy).to({'angle': 180}, 2000, Easing.Cubic.In, true, 1000 ,10,true);
+      enemy.body.velocity.y = ENEMYVELOCITY;
     }
     enemies.x = 0;
     enemies.y = 0;
 
     //  All this does is basically start the invaders moving. Notice we're moving the Group they belong to, rather than the invaders directly.
-    Tween tween = game.add.tween(enemies)
+    /*tween = game.add.tween(enemies)
     .to({
-        'y': 200
-    }, 5000, Easing.Linear.None, true, 800, 1000, true);
+        'y': 0
+    }, 5000, Easing.Linear.None, true, 800, 1000, true);*/
+    
     
     //game.add.tween(enemies).to({'angle': 360}, 2000, Easing.Cubic.In, true, 1000 ,10,false);
 
 
     //  When the tween loops it calls descend
     //tween.onLoop.add(descend);
-    
-    
   }
   
+  collisionHandler (bullet,enemy) {
+    print("Asplode!");
+    enemy.kill();
+    bullet.kill();
+
+    score += 20;
+    scoreText.text = scoreString + score.toString();
+  }
+  
+  newwave() {
+    
+    enemies.removeAll();
+    createEnemies();
+    wave += 1;
+    waveText.text = waveString + wave.toString();
+  }
   
   
 }
