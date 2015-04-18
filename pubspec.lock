@@ -5,3 +5,15 @@ packages:
     description: browser
     source: hosted
     version: "0.10.0+2"
+  p2:
+    description: p2
+    source: hosted
+    version: "0.5.5"
+  play_phaser:
+    description: play_phaser
+    source: hosted
+    version: "0.12.2"
+  play_pixi:
+    description: play_pixi
+    source: hosted
+    version: "0.10.6"
