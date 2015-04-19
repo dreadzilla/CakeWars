@@ -1,13 +1,12 @@
-// Copyright (c) 2015, <your name>. All rights reserved. Use of this source code
+// Copyright (c) 2015, Hakan Staby. All rights reserved. Use of this source code
 // is governed by a BSD-style license that can be found in the LICENSE file.
 
 import 'dart:html';
+import 'dart:js';
 import 'packages/play_phaser/phaser.dart';
 
 void main() {
-  
   Game game = new Game(800, 600, WEBGL, 'output', new StartScreen());
-  
 }
 
 class StartScreen extends State {
@@ -20,7 +19,6 @@ class StartScreen extends State {
   
   preload() {
     // Load assets
-    // The second parameter is the URL of the image (relative)
     game.load.image('milkyway', 'assets/background/milkyway.png');
     game.load.image('ship_base', 'assets/sprites/ship_base.png');
     game.load.audio('bgmusic', 'assets/sounds/cakewars.ogg');
@@ -42,7 +40,7 @@ class StartScreen extends State {
     greetingsText.anchor.setTo(0.5, 0.5);
     greetingsText.visible = true;
     
-    instructionString = "Steer with ASDF \nShoot with the Spacebar\nClick the screen to start ";
+    instructionString = "Steer with ASDF \nShoot with the Spacebar\nClick the screen to start";
     instructionsText = game.add.text(game.world.centerX, game.world.centerY, instructionString, new TextStyle()
     ..font = '34px Arial'
     ..fill = '#fff');
@@ -54,11 +52,10 @@ class StartScreen extends State {
     bgmusic = game.add.audio('bgmusic');
     // Play music
     bgmusic.play('',0,0.01,true);
-    //bgmusic.volume = 0.01;
     
     // Add gamestate
     game.state.add("ShootingAction", new ShootingAction());
-    //the "click to restart" handler
+    //the "click to start" handler
     game.input.onTap.addOnce(startGame);
     
   }
@@ -72,14 +69,14 @@ class StartScreen extends State {
   }
   
 }
-
+// Main game class
 class ShootingAction extends State {
   Text scoreText;
   Text waveText;
   Sprite player;
   Sprite<dynamic> enemy;
   TileSprite milkyway; //Our neverending milkyway sprite
-  //CursorKeys cursors; //Keys for input
+  //Keys for input
   Key firebutton, left, right, up, down;
   Sprite bullet;
   Group<Sprite> lives;
@@ -88,30 +85,25 @@ class ShootingAction extends State {
   Group<Sprite> enemyBullets;
   Group<Sprite> explosions;
   Group<Sprite> fruitbaskets;
+  Group<Sprite> healths;
   Sprite fruitbasket;
     
-  num bullettime = 0, enemytime = 0, acceltime = 0, firingtime = 0;
+  num bullettime = 0, enemytime = 0, acceltime = 0, firingtime = 0, enemybullettime = 120;
   num ENEMYTIMEDISTANCE = 0;
   num ENEMYDISTANCE = 48;
   num ENEMYVELOCITYMAX = 150;
-  num wavesize = 10, enemyamount = 0;
+  num wavesize = 10, enemyamount = 0, gunamount = 0;
   num score = 0, wave = 1;
-  int tweenindex = 0;
   String scoreString, waveString;
   num cutoffdirection = 400;
   num boundarydist = 25;
-  Point maxvelocity = new Point (150,150);
   List<Sprite> livingEnemies = [];
   Text stateText;
   Sound laser, enemylaser, enemyexplosion, newwavesound, playerexplosion, bgmusic;
   Point enemylastposition;
   
-  Tween tween;
-  var data;
-  
   preload() {
     // Load assets
-    // The second parameter is the URL of the image (relative)
     game.load.image('milkyway', 'assets/background/milkyway.png');
     game.load.image('ship_base', 'assets/sprites/ship_base.png');
     game.load.image('bullet', 'assets/sprites/bullet.png');
@@ -126,9 +118,6 @@ class ShootingAction extends State {
     game.load.audio('newwavesound', 'assets/sounds/newwavesound.wav');
     game.load.audio('playerexplosion','assets/sounds/playerexplosion.wav');
     game.load.audio('bgmusic', 'assets/sounds/cakewars.ogg');
-    
-        
-    //explode
    
   }
 
@@ -176,7 +165,7 @@ class ShootingAction extends State {
     
     //  An explosion pool
     explosions = game.add.group();
-    explosions.createMultiple(30, 'kaboom');
+    explosions.createMultiple(15, 'kaboom');
     explosions.forEach(setupExplosion);
     
     //  Our bullet group
@@ -194,7 +183,7 @@ class ShootingAction extends State {
     enemyBullets = game.add.group();
     enemyBullets.enableBody = true;
     enemyBullets.physicsBodyType = Physics.ARCADE;
-    enemyBullets.createMultiple(300, 'enemybullet');
+    enemyBullets.createMultiple(30, 'enemybullet');
     enemyBullets.forEach((Sprite s) {
       s.anchor.set(0.5, 1);
       s.outOfBoundsKill = true;
@@ -205,11 +194,23 @@ class ShootingAction extends State {
     fruitbaskets = game.add.group();
     fruitbaskets.enableBody = true;
     fruitbaskets.physicsBodyType = Physics.ARCADE;
-    fruitbaskets.createMultiple(10, 'fruitbasket');
+    fruitbaskets.createMultiple(5, 'fruitbasket');
     fruitbaskets.forEach((Sprite s) {
-      s.anchor.set(0.5, 1);
+      s.anchor.set(0.5, 0.5);
       s.outOfBoundsKill = true;
       s.checkWorldBounds = true;
+    });
+    
+    // Health powerup
+    healths = game.add.group();
+    healths.enableBody = true;
+    healths.physicsBodyType = Physics.ARCADE;
+    healths.createMultiple(5,'ship_base');
+    healths.forEach((Sprite s) {
+      s.anchor.set(0.5, 0.5);
+      s.outOfBoundsKill = true;
+      s.checkWorldBounds = true;
+      s.scale = new Point(1.5,1.5);
     });
     
     // Add player
@@ -235,11 +236,6 @@ class ShootingAction extends State {
     // FIRE!    
     firebutton = game.input.keyboard.addKey(Keyboard.SPACEBAR);
     
-    // Create moving objects
-    /*var tweenData = { 'x': 400,'y': 0};
-    tween = game.make.tween(tweenData).to({'x':400,'y':700}, 10000, Easing.Linear.None);
-    data = tween.generateData(60);*/ // Save the track that enemy will follow
-    
     // Create a group of enemies
     enemies = game.add.group();
     enemies.enableBody = true;
@@ -247,13 +243,6 @@ class ShootingAction extends State {
     
     // Play music
     bgmusic.play('',0,0.2,true);
-    
-    //createEnemies();
-    
-    /*for (int i=0;i<10;i++) {
-      enemies.create(400, -32, 'enemy');
-      game.add.tween(enemies).to({'angle': 360}, 2400, Easing.Cubic.In, true, 1000 +400*i);
-    }*/
     
   }
   
@@ -303,7 +292,9 @@ class ShootingAction extends State {
     // Collision
     game.physics.arcade.overlap(bullets, enemies, collisionHandler);
     game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer);
-    
+    game.physics.arcade.overlap(fruitbaskets, player, eatFruit);
+    game.physics.arcade.overlap(healths, player, eatHealth);
+        
     // Create enemies if the wave isn't full
     if (enemyamount < wavesize) {
       createEnemy();
@@ -333,7 +324,6 @@ class ShootingAction extends State {
   } 
   
   enemyFires() {
-
     //  Grab the first bullet we can from the pool
     Sprite enemyBullet = enemyBullets.getFirstExists(false);
 
@@ -343,7 +333,6 @@ class ShootingAction extends State {
       // put every living enemy in an array
       livingEnemies.add(alien);
     });
-
 
     if (enemyBullet != null && livingEnemies.length > 0) {
 
@@ -358,10 +347,9 @@ class ShootingAction extends State {
         enemylaser.play();      
       }
 
-      game.physics.arcade.moveToObject(enemyBullet, player, 120);
+      game.physics.arcade.moveToObject(enemyBullet, player, enemybullettime);
       firingtime = game.time.now + 2000;
     }
-
   }
   
   fireBullet() {
@@ -369,7 +357,7 @@ class ShootingAction extends State {
     //  To avoid them being allowed to fire too fast we set a time limit
     if (game.time.now > bullettime) {
       //  Grab the first bullet we can from the pool
-      for (int i = -1;i < 1;i++) {
+      for (int i = -gunamount;i < gunamount+1;i++) {
         Sprite bullet = bullets.getFirstExists(false);
 
         if (bullet != null) {
@@ -381,9 +369,8 @@ class ShootingAction extends State {
           bullettime = game.time.now + 200;
         }
       }
-        laser.play();
+        laser.play(); // Sound effect
     }
-
   }
   
   createEnemy() {
@@ -393,33 +380,28 @@ class ShootingAction extends State {
       num rndX = Math.random() * 400;
       enemy = enemies.create(600 - rndX, -32, 'enemy'); // Live between 200 and 600 pixels
       enemy.anchor.setTo(0.5, 0.5);
-      //enemy.alpha = 0.3;
       game.add.tween(enemy).to({'angle': 180}, 2000, Easing.Cubic.In, true, 1000 ,10,true);
-      //game.add.tween(enemy).to({'alpha': 1}, 2000, Easing.Linear.None, true, 0, 1000, true);
-      
-      enemy.body.acceleration = new Point(Math.random() * ENEMYVELOCITYMAX -ENEMYVELOCITYMAX/2, Math.random() * ENEMYVELOCITYMAX -ENEMYVELOCITYMAX/2);
-      
-      enemy.body.maxVelocity = new Point(ENEMYVELOCITYMAX, ENEMYVELOCITYMAX);
+      // Random acceleration
+      enemy.body.acceleration = new Point(Math.random() * ENEMYVELOCITYMAX -ENEMYVELOCITYMAX/2, Math.random() * ENEMYVELOCITYMAX -ENEMYVELOCITYMAX/2);  
+      enemy.body.maxVelocity = new Point(ENEMYVELOCITYMAX, ENEMYVELOCITYMAX); // Don't accelerate forever
       
       enemytime = game.time.now + 200;
       // Play wave sound
       if (enemyamount == 0) {
         newwavesound.play();
       }
-      
       enemyamount++;
     }
-    // Acceleration is dependent on time instead of wave, meaning it is better to be fast.
+    // Acceleration is dependent on time instead of wave, meaning it is better to kill waves fast.
     if (game.time.now > acceltime) {
       ENEMYVELOCITYMAX = ENEMYVELOCITYMAX + 50;
       acceltime = game.time.now + 20000;
       print("Accelerate");
     }
-    
   }
   
   collisionHandler (bullet,enemy) {
-    print("Asplode!");
+    //print("Asplode!");
     enemy.kill();
     bullet.kill();
     // Update score
@@ -432,7 +414,6 @@ class ShootingAction extends State {
     explosion.play('kaboom', 30, false, true);
     
     enemyexplosion.play();
-    
   }
   
   enemyHitsPlayer(player, bullet) {
@@ -454,6 +435,8 @@ class ShootingAction extends State {
     explosion.play('kaboom', 30, false, true);
     // Play a crash
     playerexplosion.play();
+    // Only one gun left after being hit
+    gunamount = 0;
     
     // When the player dies
     if (lives.countLiving() < 1) {
@@ -466,42 +449,63 @@ class ShootingAction extends State {
       //the "click to restart" handler
       game.input.onTap.addOnce(restart);
     }
-    
-    
+  }
+  
+  eatFruit(player, fruitbasket) {
+    fruitbasket.kill();
+    if (gunamount < 5)
+      gunamount++;
+  }
+  
+  eatHealth(player, health) {
+    health.kill();
+    Sprite s = lives.getFirstDead();
+    if (s != null)
+      //resets the life count
+      lives.forEach((Sprite s) => s.revive());
   }
   
   // Start new wave. Reset counter. 
   newwave() {
-    
     enemies.removeAll();
-    //createEnemies();
     // Give wave kill score
     score += 1000;
     scoreText.text = scoreString + score.toString();
     enemyamount = 0;
     wave += 1;
+    enemybullettime += 10;
     waveText.text = waveString + wave.toString();
-    
-    sendTreats();
+    var luck = Math.random()*100;
+    if (luck > 90){ // Get more health
+      sendHealth();
+    } else if (luck > 60) { // Get more guns!!
+      sendTreats();
+    }
   }
-  
+  // We need more guns!!
   sendTreats() {
     Sprite fruitbasket = fruitbaskets.getFirstExists(false);
     
     fruitbasket.reset(enemy.x, enemy.y);
     fruitbasket.body.velocity.y = 50;
     fruitbasket.anchor.setTo(0.5, 0.5);
-    fruitbasket.alpha = 1;
-    game.add.tween(fruitbasket).to({'alpha': 2}, 2000, Easing.Linear.None, true, 1000 ,10,true);
+    fruitbasket.alpha = 0.5;
+    game.add.tween(fruitbasket).to({'alpha': 1}, 2000, Easing.Linear.None, true, 1000 ,10,true);
   }
-  
+  // Full health for you!
+  sendHealth() {
+    Sprite healthsprite = healths.getFirstExists(false);
+    healthsprite.reset(enemy.x, enemy.y);
+    healthsprite.body.velocity.y = 50;
+    healthsprite.anchor.setTo(0.5, 0.5);
+    healthsprite.alpha = 0.5;
+    game.add.tween(healthsprite).to({'alpha': 1}, 2000, Easing.Linear.None, true, 1000 ,10,true);
+  }
+  // Restart from the beginning.
   restart(Pointer pointer, bool doubleTab) {
-
-    //  A new level starts
-
     //resets the life count
     lives.forEach((Sprite s) => s.revive());
-    //  And brings the aliens back from the dead :)
+    // And reset everything.
     enemies.removeAll();
     score = 0;
     scoreText.text = scoreString + score.toString();
@@ -513,10 +517,11 @@ class ShootingAction extends State {
     enemytime = 0; 
     acceltime = 0; 
     firingtime = 0;
+    gunamount = 0;
+    enemybullettime = 120; //Reset shooting time
     
     ENEMYVELOCITYMAX = 150;
-    maxvelocity = new Point (150,150);
-
+    
     //revives the player
     player.revive();
     //hides the text
