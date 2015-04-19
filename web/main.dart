@@ -24,11 +24,13 @@ class ShootingAction extends State {
   Group<Sprite> enemies;    
   num bullettime = 0;
   num ENEMYDISTANCE = 48;
-  num ENEMYVELOCITY = 150;
+  num ENEMYVELOCITYMAX = 150;
   num score = 0, wave = 1;
   int tweenindex = 0;
   String scoreString, waveString;
   num cutoffdirection = 400;
+  num boundarydist = 25;
+  Point maxvelocity = new Point (150,150);
   
   
   Tween tween;
@@ -157,12 +159,13 @@ class ShootingAction extends State {
     
     enemies.forEachAlive((enemy) {
       //print(enemy.y);
-      if(enemy.y > cutoffdirection) {
+      boundaries (enemy);
+      /*if(enemy.y > cutoffdirection) {
         enemy.body.velocity.setTo(0,0);
-        enemy.body.velocity += ENEMYVELOCITY;
+        enemy.body.velocity += ENEMYVELOCITYMAX;
         //cutoffdirection = cutoffdirection + Math.random() * 10;
         //print("Outside");
-      }
+      }*/
       if (enemy.y > 616 || enemy.x > 816 || enemy.y < -432|| enemy.x < 0 ) {
         enemy.kill();
       }
@@ -171,11 +174,38 @@ class ShootingAction extends State {
    // game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer);
     game.physics.arcade.overlap(bullets, enemies, collisionHandler);
     
-    if (enemies.countLiving() == 0) {
+    if (enemies.countLiving() < 0) {
+      //createEnemy();
       newwave();
     }
     
   }
+  
+  boundaries(Sprite location) {
+
+    //Point desired = null;
+    //enemy.body.acceleration = new Point (0,0);
+    if (location.position.x < boundarydist) {
+      location.body.velocity.x += ENEMYVELOCITYMAX;
+      
+      //desired = new Point( velocity.y);
+    } 
+    else if (location.position.x > game.world.width -boundarydist) {
+      location.body.velocity.x -= ENEMYVELOCITYMAX;
+      //desired = new PVector(-ENEMYVELOCITYMAX, velocity.y);
+    } 
+
+    if (location.position.y < boundarydist) {
+      location.body.velocity.y += ENEMYVELOCITYMAX;
+      //desired = new PVector(velocity.x, ENEMYVELOCITYMAX);
+    } 
+    else if (location.position.y > game.world.height-boundarydist) {
+      location.body.velocity.y -= ENEMYVELOCITYMAX;
+      location.body.velocity.x -= 10;
+      //desired = new PVector(velocity.x, -ENEMYVELOCITYMAX);
+    } 
+    
+  } 
   
   fireBullet() {
 
@@ -211,24 +241,17 @@ class ShootingAction extends State {
       //enemy.play('fly');
       //enemy.body.moves = false;
       game.add.tween(enemy).to({'angle': 180}, 2000, Easing.Cubic.In, true, 1000 ,10,true);
-      enemy.body.velocity.y = ENEMYVELOCITY;
+      //game.add.tween(enemy.position).to({'y': 600},2000,Easing.Linear.None).start();
+      enemy.body.velocity.y = ENEMYVELOCITYMAX;
+      //enemy.body.velocity.x = ENEMYVELOCITYMAX;
+      //enemy.body.acceleration = new Point (50, 40);
+      enemy.body.maxVelocity = new Point(ENEMYVELOCITYMAX, ENEMYVELOCITYMAX);
     }
     enemies.x = 0;
     enemies.y = 0;
-
-    //  All this does is basically start the invaders moving. Notice we're moving the Group they belong to, rather than the invaders directly.
-    /*tween = game.add.tween(enemies)
-    .to({
-        'y': 0
-    }, 5000, Easing.Linear.None, true, 800, 1000, true);*/
-    
-    
-    //game.add.tween(enemies).to({'angle': 360}, 2000, Easing.Cubic.In, true, 1000 ,10,false);
-
-
-    //  When the tween loops it calls descend
-    //tween.onLoop.add(descend);
   }
+  
+  
   
   collisionHandler (bullet,enemy) {
     print("Asplode!");
