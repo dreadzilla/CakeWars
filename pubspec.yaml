@@ -1,11 +1,10 @@
-name: FruitWars
-version: 0.0.1
-author: Hakan Staby
-description: 'The master cake race has come to enslave the peaceful Fruits. You must
-  push the attackers back to where they came from. You do it with the only tool you
-  know: fruit!'
+name: CakeWars
+version: 1.0.0
+author: Hakan Staby <hakan.staby@gmail.com>
+description: "Stop the Cake master race before they assert their world domination\
+  \ by global teeth decay! \r\nYou do it with the only tool you know: Fruit!"
 environment:
   sdk: '>=1.0.0 <2.0.0'
 dependencies:
-  browser: any
-  play_phaser: any
+  browser: '>=0.10.0+2 <0.11.0'
+  play_phaser: '>=0.12.2 <0.13.0'

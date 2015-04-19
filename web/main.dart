@@ -3,7 +3,7 @@
 
 import 'dart:html';
 import 'dart:js';
-import 'packages/play_phaser/phaser.dart';
+import 'package:play_phaser/phaser.dart';
 
 void main() {
   Game game = new Game(800, 600, WEBGL, 'output', new StartScreen());
@@ -318,7 +318,7 @@ class ShootingAction extends State {
     } 
     else if (location.position.y > game.world.height-boundarydist) {
       location.body.velocity.y -= ENEMYVELOCITYMAX;
-      location.body.velocity.x -= 10;
+      //location.body.velocity.x -= 10;
     } 
     
   } 
@@ -369,7 +369,7 @@ class ShootingAction extends State {
           bullettime = game.time.now + 200;
         }
       }
-        laser.play(); // Sound effect
+        laser.play('',0,0.2); // Sound effect
     }
   }
   
