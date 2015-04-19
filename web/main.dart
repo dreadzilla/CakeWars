@@ -22,16 +22,22 @@ class ShootingAction extends State {
   Group<Sprite> lives;
   Group<Sprite> bullets;
   Group<Sprite> enemies;    
-  num bullettime = 0;
+  Group<Sprite> enemyBullets;
+  Group<Sprite> explosions;
+  num bullettime = 0, enemytime = 0, acceltime = 0, firingtime = 0;
+  num ENEMYTIMEDISTANCE = 0;
   num ENEMYDISTANCE = 48;
   num ENEMYVELOCITYMAX = 150;
+  num wavesize = 10, enemyamount = 0;
   num score = 0, wave = 1;
   int tweenindex = 0;
   String scoreString, waveString;
   num cutoffdirection = 400;
   num boundarydist = 25;
   Point maxvelocity = new Point (150,150);
-  
+  List<Sprite> livingEnemies = [];
+  Text stateText;
+  Sound laser, enemylaser, enemyexplosion, newwavesound, playerexplosion, bgmusic;
   
   Tween tween;
   var data;
@@ -43,9 +49,18 @@ class ShootingAction extends State {
     game.load.image('ship_base', 'assets/sprites/ship_base.png');
     game.load.image('bullet', 'assets/sprites/bullet.png');
     game.load.image('enemy', 'assets/sprites/cake.png');
+    game.load.image('enemybullet', 'assets/sprites/enemybullet.png');
+    game.load.spritesheet('kaboom', 'assets/sprites/explode.png', 32, 32);
+    game.load.audio('laser', 'assets/sounds/laser.wav');
+    game.load.audio('enemylaser', 'assets/sounds/enemylaser.wav');
+    game.load.audio('enemylaser', 'assets/sounds/enemylaser.wav');
+    game.load.audio('enemyexplosion', 'assets/sounds/enemyexplosion.wav');  
+    game.load.audio('newwavesound', 'assets/sounds/newwavesound.wav');
+    game.load.audio('playerexplosion','assets/sounds/playerexplosion.wav');
+    game.load.audio('bgmusic', 'assets/sounds/cakewars.ogg');
+        
+    //explode
    
-    //game.load.image('ship_left', 'assets/background/ship_left.png');
-    //game.load.image('ship_right', 'assets/background/ship_right.png');
   }
 
   create() {
@@ -69,6 +84,13 @@ class ShootingAction extends State {
       ..font = '34px Helvetica'
       ..fill = '#fff');
     
+    //  Text in the middle of the screen
+    stateText = game.add.text(game.world.centerX, game.world.centerY, ' ', new TextStyle()
+      ..font = '84px Arial'
+      ..fill = '#fff');
+    stateText.anchor.setTo(0.5, 0.5);
+    stateText.visible = false;
+    
     // The lives
     lives = game.add.group();
     game.add.text(game.world.width - 118, 10, 'Lives : ', new TextStyle()
@@ -83,6 +105,11 @@ class ShootingAction extends State {
       ship.alpha = 0.4;
     }
     
+    //  An explosion pool
+    explosions = game.add.group();
+    explosions.createMultiple(30, 'kaboom');
+    explosions.forEach(setupExplosion);
+    
     //  Our bullet group
     bullets = game.add.group();
     bullets.enableBody = true;
@@ -93,14 +120,31 @@ class ShootingAction extends State {
       s.outOfBoundsKill = true; // Remove if outside of screen
       s.checkWorldBounds = true; // Check for bounds
     });
+    
+    // The enemy's bullets
+    enemyBullets = game.add.group();
+    enemyBullets.enableBody = true;
+    enemyBullets.physicsBodyType = Physics.ARCADE;
+    enemyBullets.createMultiple(300, 'enemybullet');
+    enemyBullets.forEach((Sprite s) {
+      s.anchor.set(0.5, 1);
+      s.outOfBoundsKill = true;
+      s.checkWorldBounds = true;
+    });
+    
     // Add player
     player = game.add.sprite(game.world.centerX, game.world.centerY*1.5, 'ship_base'); // Spawn in the middle and halfway down.
     
-    // Add enemy
-    //enemy = game.add.sprite(game.world.centerX, 100, 'enemy');
+    // Add sounds
+    laser = game.add.audio('laser',0.5);
+    enemylaser = game.add.audio('enemylaser',0.5);
+    enemyexplosion = game.add.audio('enemyexplosion',0.5);
+    newwavesound = game.add.audio('newwavesound',0.5);
+    playerexplosion = game.add.audio('playerexplosion',0.5);
+    bgmusic = game.add.audio('bgmusic');
     
     //  Achor in the middle
-    player.anchor.set(0.5);
+    player.anchor.setTo(0.5,0.5);
     game.physics.enable(player, Physics.ARCADE); // Give player physics
     player.body.collideWorldBounds = true; // Don't go outside our world.
     //  And some controls to play the game with
@@ -121,15 +165,22 @@ class ShootingAction extends State {
     enemies.enableBody = true;
     enemies.physicsBodyType = Physics.ARCADE;
     
-    createEnemies();
+    // Play music
+    bgmusic.play('',0,0.3,true);
     
+    //createEnemies();
     
     /*for (int i=0;i<10;i++) {
       enemies.create(400, -32, 'enemy');
       game.add.tween(enemies).to({'angle': 360}, 2400, Easing.Cubic.In, true, 1000 +400*i);
     }*/
     
-    
+  }
+  
+  setupExplosion(asplode) {
+    asplode.anchor.x = 0.5;
+    asplode.anchor.y = 0.5;
+    asplode.animations.add('kaboom');
   }
   
   update () {
@@ -153,8 +204,12 @@ class ShootingAction extends State {
     } 
     
     // Shoot!
-    if (firebutton.isDown /* && player.alive*/) {
+    if (firebutton.isDown  && player.alive) {
       fireBullet();
+    }
+    
+    if (game.time.now > firingtime && player.alive) {
+      enemyFires();
     }
     
     enemies.forEachAlive((enemy) {
@@ -171,11 +226,14 @@ class ShootingAction extends State {
       }
     });
     // Collision
-   // game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer);
+   
     game.physics.arcade.overlap(bullets, enemies, collisionHandler);
+    game.physics.arcade.overlap(enemyBullets, player, enemyHitsPlayer);
     
-    if (enemies.countLiving() < 0) {
-      //createEnemy();
+    // Create enemies if the wave isn't full
+    if (enemyamount < wavesize) {
+      createEnemy();
+    } else if (enemies.countLiving() == 0){
       newwave();
     }
     
@@ -207,6 +265,38 @@ class ShootingAction extends State {
     
   } 
   
+  enemyFires() {
+
+    //  Grab the first bullet we can from the pool
+    Sprite enemyBullet = enemyBullets.getFirstExists(false);
+
+    livingEnemies.clear();
+
+    enemies.forEachAlive((alien) {
+      // put every living enemy in an array
+      livingEnemies.add(alien);
+    });
+
+
+    if (enemyBullet != null && livingEnemies.length > 0) {
+
+      var random = game.rnd.integerInRange(0, livingEnemies.length - 1);
+
+      // randomly select one of them
+      var shooter = livingEnemies[random];
+      // And fire the bullet from this enemy
+      enemyBullet.reset(shooter.body.x, shooter.body.y);
+      // Sound!
+      if (firingtime > 0) {
+        enemylaser.play();      
+      }
+
+      game.physics.arcade.moveToObject(enemyBullet, player, 120);
+      firingtime = game.time.now + 2000;
+    }
+
+  }
+  
   fireBullet() {
 
     //  To avoid them being allowed to fire too fast we set a time limit
@@ -224,51 +314,134 @@ class ShootingAction extends State {
           bullettime = game.time.now + 200;
         }
       //}
+        laser.play();
     }
 
   }
   
-  createEnemies() {
-    num rndX = Math.random() * 400;
-    //game.rnd.integerInRange(0, game.world.width);
-    cutoffdirection = 400 - Math.random() * 200;
-    print(rndX);
-    for (int y = 1; y < 9; y++) {  
-      
-      enemy = enemies.create(600 - rndX, y * -48, 'enemy'); // Live between 200 and 600 pixels
+  createEnemy() {
+    
+    // If enough time has passed. Create enemy
+    if (game.time.now > enemytime) {
+      num rndX = Math.random() * 400;
+      enemy = enemies.create(600 - rndX, -32, 'enemy'); // Live between 200 and 600 pixels
       enemy.anchor.setTo(0.5, 0.5);
-      //alien.animations.add('fly', [ 0, 1, 2, 3 ], 20, true);
-      //enemy.play('fly');
-      //enemy.body.moves = false;
+      //enemy.alpha = 0.3;
       game.add.tween(enemy).to({'angle': 180}, 2000, Easing.Cubic.In, true, 1000 ,10,true);
-      //game.add.tween(enemy.position).to({'y': 600},2000,Easing.Linear.None).start();
-      enemy.body.velocity.y = ENEMYVELOCITYMAX;
-      //enemy.body.velocity.x = ENEMYVELOCITYMAX;
-      //enemy.body.acceleration = new Point (50, 40);
+      //game.add.tween(enemy).to({'alpha': 1}, 2000, Easing.Linear.None, true, 0, 1000, true);
+      
+      enemy.body.acceleration = new Point(Math.random() * ENEMYVELOCITYMAX -ENEMYVELOCITYMAX/2, Math.random() * ENEMYVELOCITYMAX -ENEMYVELOCITYMAX/2);
+      
       enemy.body.maxVelocity = new Point(ENEMYVELOCITYMAX, ENEMYVELOCITYMAX);
+      
+      enemytime = game.time.now + 200;
+      // Play wave sound
+      if (enemyamount == 0) {
+        newwavesound.play();
+      }
+      
+      enemyamount++;
     }
-    enemies.x = 0;
-    enemies.y = 0;
+    // Acceleration is dependent on time instead of wave, meaning it is better to be fast.
+    if (game.time.now > acceltime) {
+      ENEMYVELOCITYMAX = ENEMYVELOCITYMAX + 50;
+      acceltime = game.time.now + 20000;
+      print("Accelerate");
+    }
+    
   }
-  
-  
   
   collisionHandler (bullet,enemy) {
     print("Asplode!");
     enemy.kill();
     bullet.kill();
-
+    // Update score
     score += 20;
     scoreText.text = scoreString + score.toString();
+    
+    //  And create an explosion :)
+    var explosion = explosions.getFirstExists(false);
+    explosion.reset(enemy.body.x, enemy.body.y);
+    explosion.play('kaboom', 30, false, true);
+    
+    enemyexplosion.play();
+    
   }
   
+  enemyHitsPlayer(player, bullet) {
+    bullet.kill();
+    
+    Sprite live = lives.getFirstAlive();
+    
+    if (live != null) {
+      live.kill();
+    }
+    
+    player.alpha = 0;
+    game.add.tween(player).to({'alpha': 1}, 500, Easing.Linear.None, true, 0, 3, false);
+    
+    // Create explosion
+    var explosion = explosions.getFirstExists(false);
+    explosion.reset(player.body.x+16, player.body.y+16);
+    explosion.bringToTop();
+    explosion.play('kaboom', 30, false, true);
+    // Play a crash
+    playerexplosion.play();
+    
+    // When the player dies
+    if (lives.countLiving() < 1) {
+      print("player kill");
+      player.kill();
+      enemyBullets.forEach((Sprite s) => s.kill());
+      
+      stateText.text = " GAME OVER \n Click to restart";
+      stateText.visible = true;
+      //the "click to restart" handler
+      game.input.onTap.addOnce(restart);
+    }
+    
+    
+  }
+  
+  // Start new wave. Reset counter. 
   newwave() {
     
     enemies.removeAll();
-    createEnemies();
+    //createEnemies();
+    // Give wave kill score
+    score += 1000;
+    scoreText.text = scoreString + score.toString();
+    enemyamount = 0;
     wave += 1;
     waveText.text = waveString + wave.toString();
   }
   
+  restart(Pointer pointer, bool doubleTab) {
+
+    //  A new level starts
+
+    //resets the life count
+    lives.forEach((Sprite s) => s.revive());
+    //  And brings the aliens back from the dead :)
+    enemies.removeAll();
+    score = 0;
+    scoreText.text = scoreString + score.toString();
+    wave = 1;
+    waveText.text = waveString + wave.toString();
+    
+    enemyamount = 0;
+    bullettime = 0; 
+    enemytime = 0; 
+    acceltime = 0; 
+    firingtime = 0;
+    
+    ENEMYVELOCITYMAX = 150;
+    maxvelocity = new Point (150,150);
+
+    //revives the player
+    player.revive();
+    //hides the text
+    stateText.visible = false;
+  }
   
 }
