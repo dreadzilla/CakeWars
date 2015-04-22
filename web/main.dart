@@ -40,7 +40,7 @@ class StartScreen extends State {
     greetingsText.anchor.setTo(0.5, 0.5);
     greetingsText.visible = true;
     
-    instructionString = "Steer with ASDF \nShoot with the Spacebar\nClick the screen to start";
+    instructionString = "Steer with WASD \nShoot with the Spacebar\nClick the screen to start";
     instructionsText = game.add.text(game.world.centerX, game.world.centerY, instructionString, new TextStyle()
     ..font = '34px Arial'
     ..fill = '#fff');
